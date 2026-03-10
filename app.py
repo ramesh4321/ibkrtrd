@@ -39,13 +39,23 @@ try:
 except ImportError:
     HAS_TA = False
 
+# ib_insync works only when running LOCALLY with IB Gateway on the same machine.
+# On Streamlit Cloud it always runs in Simulation mode — that is intentional.
+HAS_IB = False
+IB = Stock = Forex = Crypto = MarketOrder = LimitOrder = util = None
 try:
-    from ib_insync import IB, Stock, Forex, Crypto, MarketOrder, LimitOrder, util
+    import importlib
+    _ib = importlib.import_module("ib_insync")
+    IB           = _ib.IB
+    Stock        = _ib.Stock
+    Forex        = _ib.Forex
+    Crypto       = _ib.Crypto
+    MarketOrder  = _ib.MarketOrder
+    LimitOrder   = _ib.LimitOrder
+    util         = _ib.util
     HAS_IB = True
 except Exception:
-    # ib_insync not installed or incompatible — app runs in demo/simulation mode
-    HAS_IB = False
-    IB = Stock = Forex = Crypto = MarketOrder = LimitOrder = util = None
+    pass   # Cloud / incompatible env → simulation mode, no error shown
 
 # ─────────────────────────────────────────────────────────────
 #  PAGE CONFIG
@@ -132,21 +142,7 @@ def init_state():
 
 init_state()
 
-# ── Environment banner ────────────────────────────────────────
-if not HAS_IB:
-    st.info(
-        "🔵 **Demo / Simulation Mode** — `ib_insync` is not available on this Python version "
-        "(Streamlit Cloud uses Python 3.14, which is incompatible with ib_insync). "
-        "All orders are **simulated** — no real trades placed. "
-        "To enable live IB trading, run **locally** on Python ≤3.12 with "
-        "`pip install ib_insync==0.9.86`.",
-        icon="ℹ️",
-    )
-if not HAS_TA:
-    st.warning(
-        "⚠️ `tradingview_ta` not available — showing randomly generated demo market data.",
-        icon="⚠️",
-    )
+# ── Mode is shown cleanly in the header and sidebar only ─────
 
 
 # ─────────────────────────────────────────────────────────────
@@ -358,23 +354,67 @@ with st.sidebar:
 
     st.divider()
     st.markdown("**🏦 IB Connection**")
-    ib_host = st.text_input("Host", value="127.0.0.1")
-    ib_port = st.number_input("Port", value=7497, min_value=1000, max_value=9999)
+
+    # ── Load credentials from st.secrets or manual entry ──────
+    # On Streamlit Cloud: set secrets in the dashboard
+    # Locally: add to .streamlit/secrets.toml
+    _default_user = st.secrets.get("IB_USERNAME", "") if hasattr(st, "secrets") else ""
+    _default_pass = st.secrets.get("IB_PASSWORD", "") if hasattr(st, "secrets") else ""
+    _default_host = st.secrets.get("IB_HOST", "127.0.0.1") if hasattr(st, "secrets") else "127.0.0.1"
+    _default_port = int(st.secrets.get("IB_PORT", 7497)) if hasattr(st, "secrets") else 7497
+
+    with st.expander("🔐 IB Credentials", expanded=not st.session_state.ib_connected):
+        ib_username = st.text_input("IBKR Username", value=_default_user,
+                                    placeholder="your@email.com or username",
+                                    help="Your Interactive Brokers login username")
+        ib_password = st.text_input("IBKR Password", value=_default_pass,
+                                    type="password",
+                                    placeholder="••••••••",
+                                    help="Your Interactive Brokers password")
+        ib_host = st.text_input("TWS / Gateway Host", value=_default_host,
+                                help="127.0.0.1 when running locally")
+        ib_port = st.number_input("Port", value=_default_port, min_value=1000, max_value=9999,
+                                  help="7497 = paper | 7496 = live | 4002 = IB Gateway paper | 4001 = IB Gateway live")
+        paper_port = 7497 if paper else 7496
+        st.caption(f"💡 For {'paper' if paper else 'live'} trading use port **{paper_port}**")
+
+        if ib_username and ib_password:
+            st.success("✅ Credentials loaded", icon="🔐")
+        else:
+            st.info("Enter credentials or add to `.streamlit/secrets.toml`", icon="ℹ️")
 
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🔌 Connect", use_container_width=True):
-            if HAS_IB:
+            if not HAS_IB:
+                st.error("ib_insync not installed")
+            elif not ib_username or not ib_password:
+                st.error("Enter your IBKR username & password first")
+            else:
                 try:
+                    # ib_insync connects to an already-running TWS/Gateway.
+                    # Credentials are used by TWS/Gateway itself (not passed here).
+                    # The username/password fields let you store them securely in
+                    # st.secrets and display login instructions if Gateway is not running.
                     ib = IB()
-                    ib.connect(ib_host, int(ib_port), clientId=1)
+                    ib.connect(ib_host, int(ib_port), clientId=1, readonly=False)
                     st.session_state.ib = ib
                     st.session_state.ib_connected = True
-                    st.success("Connected!")
+                    st.session_state.ib_username = ib_username
+                    st.success(f"✅ Connected as {ib_username}!")
                 except Exception as e:
-                    st.error(f"Failed: {e}")
-            else:
-                st.warning("ib_insync not installed")
+                    err = str(e)
+                    if "Connection refused" in err or "10061" in err:
+                        st.error(
+                            f"❌ Could not connect to TWS/Gateway at {ib_host}:{ib_port}\n\n"
+                            "**Make sure:**\n"
+                            "1. IB Gateway or TWS is open and logged in\n"
+                            "2. API is enabled: Edit → Global Config → API → Settings\n"
+                            "3. Port matches (7497 paper / 7496 live)\n"
+                            "4. 'Read-Only API' is unchecked"
+                        )
+                    else:
+                        st.error(f"❌ {err}")
     with col2:
         if st.button("⛔ Disconnect", use_container_width=True):
             if st.session_state.ib:
@@ -384,7 +424,8 @@ with st.sidebar:
             st.session_state.ib = None
             st.info("Disconnected")
 
-    ib_status = "🟢 Connected" if st.session_state.ib_connected else "🔴 Disconnected"
+    ib_user_label = st.session_state.get("ib_username", "")
+    ib_status = f"🟢 {ib_user_label}" if st.session_state.ib_connected else "🔴 Disconnected"
     st.caption(f"Status: {ib_status}")
 
     st.divider()
@@ -440,8 +481,15 @@ cfg = Config(
 # ─────────────────────────────────────────────────────────────
 c1, c2 = st.columns([3, 1])
 with c1:
-    mode_color = "#00ff88" if paper else "#ff4055"
-    mode_label = "📄 PAPER TRADING" if paper else "⚡ LIVE TRADING"
+    if not HAS_IB:
+        mode_color = "#3b8aff"
+        mode_label = "🔵 SIMULATION (Cloud)"
+    elif paper:
+        mode_color = "#00ff88"
+        mode_label = "📄 PAPER TRADING"
+    else:
+        mode_color = "#ff4055"
+        mode_label = "⚡ LIVE TRADING"
     st.markdown(f"""
     <h1 style="font-family:'Syne',sans-serif;font-size:32px;color:#fff;margin:0">
         MARKET<span style="color:#00ff88">PULSE</span>
