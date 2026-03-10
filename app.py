@@ -492,8 +492,8 @@ with c1:
         mode_label = "⚡ LIVE TRADING"
     st.markdown(f"""
     <h1 style="font-family:'Syne',sans-serif;font-size:32px;color:#fff;margin:0">
-        MARKET<span style="color:#00ff88">PULSE</span>
-        <span style="color:#3b8aff;font-size:24px"> + IBKR</span>
+        Ramesh<span style="color:#00ff88">Bandla</span>
+        <span style="color:#3b8aff;font-size:24px"> + </span>
     </h1>
     <p style="font-size:10px;letter-spacing:2px;color:#3d4f68;margin-top:4px">
         TRADINGVIEW SIGNALS · INTERACTIVE BROKERS AUTO TRADER
