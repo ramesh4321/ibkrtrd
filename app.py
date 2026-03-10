@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║   MarketPulse + IBKR  —  Streamlit Dashboard                ║
+║   Ramesh Bandla  —  Streamlit Dashboard                ║
 ║   TradingView Signals + Interactive Brokers Auto Trader      ║
 ╚══════════════════════════════════════════════════════════════╝
 Run locally:
@@ -61,7 +61,7 @@ except Exception:
 #  PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="MarketPulse + IBKR",
+    page_title="Ramesh Bandla",
     page_icon="📡",
     layout="wide",
     initial_sidebar_state="expanded",
