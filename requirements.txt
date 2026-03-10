@@ -1,6 +1,8 @@
 streamlit>=1.32.0
 pandas>=2.0.0
 tradingview_ta>=3.3.0
+eventkit==1.0.3
+ib_insync==0.9.86
 
 # ib_insync is ONLY needed for local live trading (Python <=3.12)
 # On Streamlit Cloud the app runs in demo/simulation mode automatically
