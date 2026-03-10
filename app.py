@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════╗
-║   Ramesh Bandla  —  Streamlit Dashboard                ║
+║   MarketPulse + IBKR  —  Streamlit Dashboard                ║
 ║   TradingView Signals + Interactive Brokers Auto Trader      ║
 ╚══════════════════════════════════════════════════════════════╝
 Run locally:
@@ -61,7 +61,7 @@ except Exception:
 #  PAGE CONFIG
 # ─────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Ramesh Bandla",
+    page_title="MarketPulse + IBKR",
     page_icon="📡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -383,47 +383,58 @@ with st.sidebar:
         else:
             st.info("Enter credentials or add to `.streamlit/secrets.toml`", icon="ℹ️")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🔌 Connect", use_container_width=True):
-            if not HAS_IB:
-                st.error("ib_insync not installed")
-            elif not ib_username or not ib_password:
-                st.error("Enter your IBKR username & password first")
-            else:
-                try:
-                    # ib_insync connects to an already-running TWS/Gateway.
-                    # Credentials are used by TWS/Gateway itself (not passed here).
-                    # The username/password fields let you store them securely in
-                    # st.secrets and display login instructions if Gateway is not running.
-                    ib = IB()
-                    ib.connect(ib_host, int(ib_port), clientId=1, readonly=False)
-                    st.session_state.ib = ib
-                    st.session_state.ib_connected = True
-                    st.session_state.ib_username = ib_username
-                    st.success(f"✅ Connected as {ib_username}!")
-                except Exception as e:
-                    err = str(e)
-                    if "Connection refused" in err or "10061" in err:
-                        st.error(
-                            f"❌ Could not connect to TWS/Gateway at {ib_host}:{ib_port}\n\n"
-                            "**Make sure:**\n"
-                            "1. IB Gateway or TWS is open and logged in\n"
-                            "2. API is enabled: Edit → Global Config → API → Settings\n"
-                            "3. Port matches (7497 paper / 7496 live)\n"
-                            "4. 'Read-Only API' is unchecked"
-                        )
-                    else:
-                        st.error(f"❌ {err}")
-    with col2:
-        if st.button("⛔ Disconnect", use_container_width=True):
-            if st.session_state.ib:
-                try: st.session_state.ib.disconnect()
-                except: pass
-            st.session_state.ib_connected = False
-            st.session_state.ib = None
-            st.info("Disconnected")
+    # ── IB Connect — only works when running LOCALLY ────────────
+    # IB Gateway listens on 127.0.0.1 which means YOUR machine.
+    # On Streamlit Cloud 127.0.0.1 is THEIR server — no Gateway there.
+    # So we always show local setup instructions on the cloud.
 
+    _home = __import__("os").environ.get("HOME", "")
+    _on_cloud = _home in ("/home/adminuser", "/home/appuser") or                 "STREAMLIT" in __import__("os").environ.get("HOSTNAME", "").upper()
+
+    if _on_cloud:
+        st.info(
+            "**IB Gateway runs on YOUR machine, not on this server.**\n\n"
+            "To trade live, run the app locally:\n\n"
+            "```bash\npip install streamlit ib_insync==0.9.86\nstreamlit run app.py\n```\n\n"
+            "Then open **IB Gateway** and click Connect.",
+            icon="💻"
+        )
+    else:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔌 Connect IB", use_container_width=True):
+                if not HAS_IB:
+                    st.error("Run: pip install ib_insync==0.9.86")
+                else:
+                    try:
+                        _ib = IB()
+                        _ib.connect(ib_host, int(ib_port), clientId=1)
+                        st.session_state.ib = _ib
+                        st.session_state.ib_connected = True
+                        st.success("✅ Connected!")
+                    except OSError as e:
+                        if "111" in str(e) or "10061" in str(e) or "refused" in str(e).lower():
+                            st.error(
+                                f"❌ IB Gateway not running at {ib_host}:{ib_port}\n\n"
+                                "Open IB Gateway / TWS first, then:\n"
+                                "Edit → Global Config → API → Settings\n"
+                                "✅ Enable ActiveX & Socket Clients\n"
+                                "❌ Uncheck Read-Only API"
+                            )
+                        else:
+                            st.error(f"❌ {e}")
+                    except Exception as e:
+                        st.error(f"❌ {e}")
+        with col2:
+            if st.button("⛔ Disconnect", use_container_width=True):
+                try:
+                    if st.session_state.ib:
+                        st.session_state.ib.disconnect()
+                except Exception:
+                    pass
+                st.session_state.ib_connected = False
+                st.session_state.ib = None
+                st.info("Disconnected")
     ib_user_label = st.session_state.get("ib_username", "")
     ib_status = f"🟢 {ib_user_label}" if st.session_state.ib_connected else "🔴 Disconnected"
     st.caption(f"Status: {ib_status}")
@@ -492,8 +503,8 @@ with c1:
         mode_label = "⚡ LIVE TRADING"
     st.markdown(f"""
     <h1 style="font-family:'Syne',sans-serif;font-size:32px;color:#fff;margin:0">
-        Ramesh<span style="color:#00ff88">Bandla</span>
-        <span style="color:#3b8aff;font-size:24px"> + </span>
+        MARKET<span style="color:#00ff88">PULSE</span>
+        <span style="color:#3b8aff;font-size:24px"> + IBKR</span>
     </h1>
     <p style="font-size:10px;letter-spacing:2px;color:#3d4f68;margin-top:4px">
         TRADINGVIEW SIGNALS · INTERACTIVE BROKERS AUTO TRADER
